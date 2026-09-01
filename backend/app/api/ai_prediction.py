@@ -1108,7 +1108,27 @@ def predict_patient(
             sepsis_probability
             >= sepsis_threshold
         )
+        # =================================================
+# CRITICAL PATIENT STATUS
+# =================================================
 
+        CRITICAL_THRESHOLD = 0.70
+
+        if sepsis_probability >= CRITICAL_THRESHOLD:
+
+            patient.critical = True
+
+        else:
+
+            patient.critical = False
+
+        db.add(patient)
+        db.commit()
+        db.refresh(patient)
+
+        print(
+                f"Critical status: {patient.critical}"
+        )
 
         # =================================================
         # ORGAN RISK
@@ -1265,6 +1285,8 @@ def predict_patient(
                     f"{patient.last_name}"
                 ),
 
+            "critical": 
+                patient.critical,
 
             # -------------------------------------------------
             # SEPSIS
@@ -1414,3 +1436,92 @@ def ai_status():
                 organ_models.keys()
             )
     }
+    # =========================================================
+# CRITICAL PATIENT COUNT
+# =========================================================
+
+@router.get("/critical-count")
+def get_critical_patient_count(
+    db: Session = Depends(get_db)
+):
+    try:
+
+        count = (
+            db.query(Patient)
+            .filter(
+                Patient.critical.is_(True)
+            )
+            .count()
+        )
+
+        return {
+            "status": "success",
+            "critical_count": count
+        }
+
+    except Exception as e:
+
+        print(
+            "Critical patient count error:",
+            str(e)
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message":
+                    "Failed to get critical patient count",
+                "error":
+                    str(e)
+            }
+        )
+
+# =========================================================
+# GET CRITICAL PATIENTS
+# =========================================================
+
+@router.get("/critical-patients")
+def get_critical_patients(
+    db: Session = Depends(get_db)
+):
+    try:
+
+        patients = (
+            db.query(Patient)
+            .filter(
+                Patient.critical.is_(True)
+            )
+            .order_by(
+                Patient.patient_id
+            )
+            .all()
+        )
+
+        return {
+            "status": "success",
+            "count": len(patients),
+            "patients": [
+                {
+                    "patient_id": patient.patient_id,
+                    "first_name": patient.first_name,
+                    "last_name": patient.last_name,
+                    "critical": patient.critical
+                }
+                for patient in patients
+            ]
+        }
+
+    except Exception as e:
+
+        print(
+            "Critical patients error:",
+            str(e)
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Failed to get critical patients",
+                "error": str(e)
+            }
+        )

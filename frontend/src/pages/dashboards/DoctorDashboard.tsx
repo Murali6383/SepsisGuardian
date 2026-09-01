@@ -28,6 +28,13 @@ interface Patient {
   admitted_at: string;
 }
 
+interface CriticalPatient {
+  patient_id: string;
+  first_name: string;
+  last_name: string;
+  critical: boolean;
+}
+
 export default function DoctorDashboard() {
   const navigate = useNavigate();
 
@@ -35,6 +42,22 @@ export default function DoctorDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+
+  // =====================================================
+  // CRITICAL PATIENT STATES
+  // =====================================================
+
+  const [criticalCount, setCriticalCount] = useState(0);
+
+  const [criticalPatients, setCriticalPatients] = useState<
+    CriticalPatient[]
+  >([]);
+
+  const [showCriticalPatients, setShowCriticalPatients] =
+    useState(false);
+
+  const [criticalPatientsLoading, setCriticalPatientsLoading] =
+    useState(false);
 
   // =====================================================
   // LOAD ADMITTED PATIENTS
@@ -65,9 +88,76 @@ export default function DoctorDashboard() {
     }
   }
 
+  // =====================================================
+  // FETCH CRITICAL COUNT
+  // =====================================================
+
+  async function fetchCriticalCount() {
+    try {
+      const response = await api.get(
+        "/api/ai/critical-count"
+      );
+
+      setCriticalCount(
+        response.data?.critical_count ?? 0
+      );
+    } catch (error) {
+      console.error(
+        "Critical count error:",
+        error
+      );
+
+      setCriticalCount(0);
+    }
+  }
+
+  // =====================================================
+  // FETCH CRITICAL PATIENTS
+  // =====================================================
+
+  async function fetchCriticalPatients() {
+    try {
+      setCriticalPatientsLoading(true);
+
+      const response = await api.get(
+        "/api/ai/critical-patients"
+      );
+
+      setCriticalPatients(
+        response.data?.patients ?? []
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Critical patients error:",
+        error
+      );
+
+      setCriticalPatients([]);
+
+    } finally {
+      setCriticalPatientsLoading(false);
+    }
+  }
+
+  // =====================================================
+  // LOAD DATA
+  // =====================================================
+
   useEffect(() => {
     loadPatients();
+    fetchCriticalCount();
   }, []);
+
+  // =====================================================
+  // CRITICAL CARD CLICK
+  // =====================================================
+
+  function handleCriticalPatientsClick() {
+    setShowCriticalPatients(true);
+    fetchCriticalPatients();
+  }
 
   // =====================================================
   // AGE CALCULATION
@@ -179,9 +269,9 @@ export default function DoctorDashboard() {
   return (
     <div className="min-h-screen bg-black text-white">
 
-      {/* ================================================= */}
-      {/* HEADER */}
-      {/* ================================================= */}
+      {/* =================================================
+          HEADER
+      ================================================= */}
 
       <header className="border-b border-[#333333] bg-[#111111]">
 
@@ -236,15 +326,15 @@ export default function DoctorDashboard() {
 
       </header>
 
-      {/* ================================================= */}
-      {/* MAIN */}
-      {/* ================================================= */}
+      {/* =================================================
+          MAIN
+      ================================================= */}
 
       <main className="mx-auto max-w-7xl px-6 py-8">
 
-        {/* ================================================= */}
-        {/* TITLE */}
-        {/* ================================================= */}
+        {/* =================================================
+            TITLE
+        ================================================= */}
 
         <div className="mb-8">
 
@@ -263,9 +353,9 @@ export default function DoctorDashboard() {
 
         </div>
 
-        {/* ================================================= */}
-        {/* ERROR */}
-        {/* ================================================= */}
+        {/* =================================================
+            ERROR
+        ================================================= */}
 
         {error && (
           <div
@@ -283,9 +373,9 @@ export default function DoctorDashboard() {
           </div>
         )}
 
-        {/* ================================================= */}
-        {/* SUMMARY CARDS */}
-        {/* ================================================= */}
+        {/* =================================================
+            SUMMARY CARDS
+        ================================================= */}
 
         <div className="mb-8 grid gap-5 md:grid-cols-3">
 
@@ -297,15 +387,22 @@ export default function DoctorDashboard() {
             icon={<BedDouble size={22} />}
           />
 
-          {/* CRITICAL PATIENTS */}
+          {/* =================================================
+              CRITICAL PATIENTS
+          ================================================= */}
 
           <div
+            onClick={handleCriticalPatientsClick}
             className="
+              cursor-pointer
               rounded-2xl
               border
               border-[#333333]
               bg-[#111111]
               p-6
+              transition
+              hover:border-red-500/40
+              hover:bg-[#161616]
             "
           >
 
@@ -318,7 +415,7 @@ export default function DoctorDashboard() {
                 </p>
 
                 <p className="mt-2 text-3xl font-bold text-white">
-                  0
+                  {criticalCount}
                 </p>
 
                 <p className="mt-1 text-xs text-gray-500">
@@ -375,9 +472,215 @@ export default function DoctorDashboard() {
 
         </div>
 
-        {/* ================================================= */}
-        {/* PATIENT SECTION */}
-        {/* ================================================= */}
+        {/* =================================================
+            CRITICAL PATIENTS LIST
+        ================================================= */}
+
+        {showCriticalPatients && (
+          <section
+            className="
+              mb-8
+              overflow-hidden
+              rounded-2xl
+              border
+              border-red-500/20
+              bg-[#111111]
+            "
+          >
+
+            {/* HEADER */}
+
+            <div
+              className="
+                flex
+                items-center
+                justify-between
+                border-b
+                border-[#333333]
+                px-6
+                py-5
+              "
+            >
+
+              <div>
+
+                <h3 className="text-lg font-semibold text-white">
+                  Critical Patients
+                </h3>
+
+                <p className="mt-1 text-sm text-gray-400">
+                  {criticalPatients.length} critical patient(s)
+                </p>
+
+              </div>
+
+              <button
+                onClick={() =>
+                  setShowCriticalPatients(false)
+                }
+                className="
+                  rounded-xl
+                  border
+                  border-[#333333]
+                  px-4
+                  py-2
+                  text-sm
+                  font-semibold
+                  text-white
+                  hover:bg-[#222222]
+                "
+              >
+                Close
+              </button>
+
+            </div>
+
+            {/* CONTENT */}
+
+            {criticalPatientsLoading ? (
+
+              <div className="px-6 py-12 text-center">
+
+                <Activity
+                  size={32}
+                  className="mx-auto mb-3 animate-pulse text-gray-400"
+                />
+
+                <p className="text-sm text-gray-400">
+                  Loading critical patients...
+                </p>
+
+              </div>
+
+            ) : criticalPatients.length === 0 ? (
+
+              <div className="px-6 py-12 text-center">
+
+                <AlertTriangle
+                  size={40}
+                  className="mx-auto mb-4 text-gray-600"
+                />
+
+                <h3 className="text-lg font-semibold text-white">
+                  No Critical Patients
+                </h3>
+
+                <p className="mt-2 text-sm text-gray-500">
+                  No patients are currently marked as critical.
+                </p>
+
+              </div>
+
+            ) : (
+
+              <div className="divide-y divide-[#333333]">
+
+                {criticalPatients.map((patient) => (
+
+                  <div
+                    key={patient.patient_id}
+                    className="
+                      flex
+                      items-center
+                      justify-between
+                      px-6
+                      py-5
+                      hover:bg-[#181818]
+                    "
+                  >
+
+                    {/* PATIENT */}
+
+                    <div className="flex items-center gap-4">
+
+                      <div
+                        className="
+                          flex
+                          h-11
+                          w-11
+                          items-center
+                          justify-center
+                          rounded-full
+                          bg-red-500/10
+                          text-red-400
+                        "
+                      >
+                        <AlertTriangle size={20} />
+                      </div>
+
+                      <div>
+
+                        <p className="font-semibold text-white">
+                          {patient.first_name}{" "}
+                          {patient.last_name}
+                        </p>
+
+                        <p className="mt-1 text-sm text-gray-500">
+                          Patient ID: {patient.patient_id}
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                    {/* STATUS + VIEW */}
+
+                    <div className="flex items-center gap-4">
+
+                      <span
+                        className="
+                          rounded-full
+                          bg-red-500/10
+                          px-3
+                          py-1
+                          text-xs
+                          font-semibold
+                          text-red-400
+                        "
+                      >
+                        CRITICAL
+                      </span>
+
+                      <button
+                        onClick={() =>
+                          viewPatient(
+                            patient.patient_id
+                          )
+                        }
+                        className="
+                          inline-flex
+                          items-center
+                          gap-2
+                          rounded-lg
+                          bg-white
+                          px-4
+                          py-2
+                          text-xs
+                          font-semibold
+                          text-black
+                          hover:bg-gray-200
+                        "
+                      >
+                        <Eye size={15} />
+                        View
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                ))}
+
+              </div>
+
+            )}
+
+          </section>
+        )}
+
+        {/* =================================================
+            PATIENT SECTION
+        ================================================= */}
 
         <section
           className="
@@ -389,9 +692,7 @@ export default function DoctorDashboard() {
           "
         >
 
-          {/* ================================================= */}
           {/* SECTION HEADER */}
-          {/* ================================================= */}
 
           <div
             className="
@@ -471,7 +772,14 @@ export default function DoctorDashboard() {
               {/* REFRESH */}
 
               <button
-                onClick={loadPatients}
+                onClick={() => {
+                  loadPatients();
+                  fetchCriticalCount();
+
+                  if (showCriticalPatients) {
+                    fetchCriticalPatients();
+                  }
+                }}
                 className="
                   rounded-xl
                   border
@@ -490,9 +798,7 @@ export default function DoctorDashboard() {
 
           </div>
 
-          {/* ================================================= */}
           {/* PATIENT TABLE */}
-          {/* ================================================= */}
 
           {filteredPatients.length === 0 ? (
 
@@ -520,9 +826,7 @@ export default function DoctorDashboard() {
 
               <table className="w-full text-left">
 
-                {/* ================================================= */}
                 {/* TABLE HEADER */}
-                {/* ================================================= */}
 
                 <thead
                   className="
@@ -534,99 +838,35 @@ export default function DoctorDashboard() {
 
                   <tr>
 
-                    <th
-                      className="
-                        px-6
-                        py-4
-                        text-xs
-                        font-semibold
-                        text-gray-400
-                      "
-                    >
+                    <th className="px-6 py-4 text-xs font-semibold text-gray-400">
                       PATIENT ID
                     </th>
 
-                    <th
-                      className="
-                        px-6
-                        py-4
-                        text-xs
-                        font-semibold
-                        text-gray-400
-                      "
-                    >
+                    <th className="px-6 py-4 text-xs font-semibold text-gray-400">
                       PATIENT
                     </th>
 
-                    <th
-                      className="
-                        px-6
-                        py-4
-                        text-xs
-                        font-semibold
-                        text-gray-400
-                      "
-                    >
+                    <th className="px-6 py-4 text-xs font-semibold text-gray-400">
                       AGE
                     </th>
 
-                    <th
-                      className="
-                        px-6
-                        py-4
-                        text-xs
-                        font-semibold
-                        text-gray-400
-                      "
-                    >
+                    <th className="px-6 py-4 text-xs font-semibold text-gray-400">
                       GENDER
                     </th>
 
-                    <th
-                      className="
-                        px-6
-                        py-4
-                        text-xs
-                        font-semibold
-                        text-gray-400
-                      "
-                    >
+                    <th className="px-6 py-4 text-xs font-semibold text-gray-400">
                       DEPARTMENT
                     </th>
 
-                    <th
-                      className="
-                        px-6
-                        py-4
-                        text-xs
-                        font-semibold
-                        text-gray-400
-                      "
-                    >
+                    <th className="px-6 py-4 text-xs font-semibold text-gray-400">
                       ADMISSION TYPE
                     </th>
 
-                    <th
-                      className="
-                        px-6
-                        py-4
-                        text-xs
-                        font-semibold
-                        text-gray-400
-                      "
-                    >
+                    <th className="px-6 py-4 text-xs font-semibold text-gray-400">
                       STATUS
                     </th>
 
-                    <th
-                      className="
-                        px-6
-                        py-4
-                        text-xs
-                        font-semibold
-                        text-gray-400
-                      "
-                    >
+                    <th className="px-6 py-4 text-xs font-semibold text-gray-400">
                       ACTION
                     </th>
 
@@ -634,9 +874,7 @@ export default function DoctorDashboard() {
 
                 </thead>
 
-                {/* ================================================= */}
                 {/* TABLE BODY */}
-                {/* ================================================= */}
 
                 <tbody>
 
@@ -706,13 +944,7 @@ export default function DoctorDashboard() {
 
                       {/* AGE */}
 
-                      <td
-                        className="
-                          px-6
-                          py-5
-                          text-gray-300
-                        "
-                      >
+                      <td className="px-6 py-5 text-gray-300">
                         {calculateAge(
                           patient.date_of_birth
                         )}
@@ -720,25 +952,13 @@ export default function DoctorDashboard() {
 
                       {/* GENDER */}
 
-                      <td
-                        className="
-                          px-6
-                          py-5
-                          text-gray-300
-                        "
-                      >
+                      <td className="px-6 py-5 text-gray-300">
                         {patient.gender}
                       </td>
 
                       {/* DEPARTMENT */}
 
-                      <td
-                        className="
-                          px-6
-                          py-5
-                          text-gray-300
-                        "
-                      >
+                      <td className="px-6 py-5 text-gray-300">
                         {patient.department || "General"}
                       </td>
 

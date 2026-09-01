@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from sqlalchemy import Boolean
 
 from sqlalchemy import (
     Boolean,
@@ -246,6 +247,7 @@ class Patient(Base):
         DateTime,
         default=datetime.utcnow
     )
+    critical = Column(Boolean, default=False, nullable=False)
 
 
 # =========================================================
