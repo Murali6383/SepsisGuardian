@@ -1,0 +1,1 @@
+export type UserRole='ADMIN'|'ADMISSION'|'NURSE'|'DOCTOR';export interface User{id:number;employee_id:string;full_name:string;email:string;role:UserRole}export interface LoginResponse{access_token:string;refresh_token:string;token_type:string;user:User}
