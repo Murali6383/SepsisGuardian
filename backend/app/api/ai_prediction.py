@@ -1,3 +1,18 @@
+# ============================================================
+# ai_prediction.py
+# SepsisGuardian AI
+#
+# Patient-specific:
+#   - Sepsis Risk Prediction
+#   - Organ Risk Prediction
+#   - Clinical Feature Impact
+#   - Critical Patient Status
+#
+# IMPORTANT:
+# This module provides AI/model predictions for software testing
+# and decision-support research. It is not a medical diagnosis.
+# ============================================================
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -5,15 +20,16 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
+
 from datetime import date
 
 from app.db.database import get_db
 from app.db.models import Patient, VitalSign, LabResult
 
 
-# =========================================================
+# ============================================================
 # ROUTER
-# =========================================================
+# ============================================================
 
 router = APIRouter(
     prefix="/api/ai",
@@ -21,10 +37,36 @@ router = APIRouter(
 )
 
 
-# =========================================================
-# MODEL DIRECTORY
-# =========================================================
+# ============================================================
+# PATHS
+# ============================================================
+#
+# Current file:
+#
+# backend/
+# ├── app/
+# │   └── api/
+# │       └── ai_prediction.py
+# │
+# └── model/
+#     ├── lightgbm_sepsis.pkl
+#     ├── kidney_risk_model_v2.pkl
+#     ├── liver_risk_model_v2.pkl
+#     ├── lung_risk_model_v2.pkl
+#     └── cardiovascular_risk_model_v2.pkl
+#
+# ============================================================
 
+# ai_prediction.py
+#       ↓ dirname
+# backend/app/api
+#
+#       ↓ dirname
+# backend/app
+#
+#       ↓ dirname
+# backend
+#
 BASE_DIR = os.path.dirname(
     os.path.dirname(
         os.path.dirname(
@@ -38,324 +80,315 @@ MODEL_DIR = os.path.join(
     "model"
 )
 
-print("========================================")
-print("SepsisGuardian AI")
-print("Model directory:", MODEL_DIR)
-print("========================================")
+
+# ============================================================
+# MODEL PATHS
+# ============================================================
+
+SEPSIS_MODEL_PATH = os.path.join(
+    MODEL_DIR,
+    "lightgbm_sepsis.pkl"
+)
+
+KIDNEY_MODEL_PATH = os.path.join(
+    MODEL_DIR,
+    "kidney_risk_model_v2.pkl"
+)
+
+LIVER_MODEL_PATH = os.path.join(
+    MODEL_DIR,
+    "liver_risk_model_v2.pkl"
+)
+
+LUNG_MODEL_PATH = os.path.join(
+    MODEL_DIR,
+    "lung_risk_model_v2.pkl"
+)
+
+CARDIOVASCULAR_MODEL_PATH = os.path.join(
+    MODEL_DIR,
+    "cardiovascular_risk_model_v2.pkl"
+)
 
 
-# =========================================================
+# ============================================================
+# MODEL PATH DEBUG
+# ============================================================
+
+print("=" * 70)
+print("[AI] MODEL CONFIGURATION")
+print("=" * 70)
+
+print(
+    f"[AI] BASE_DIR: {BASE_DIR}"
+)
+
+print(
+    f"[AI] MODEL_DIR: {MODEL_DIR}"
+)
+
+print(
+    f"[AI] Sepsis model path: "
+    f"{SEPSIS_MODEL_PATH}"
+)
+
+print(
+    f"[AI] Sepsis model exists: "
+    f"{os.path.exists(SEPSIS_MODEL_PATH)}"
+)
+
+print("=" * 70)
+
+
+# ============================================================
+# CRITICAL THRESHOLD
+# ============================================================
+
+CRITICAL_THRESHOLD = 0.70
+
+
+# ============================================================
 # LOAD MODEL PACKAGE
-# =========================================================
+# ============================================================
 
-def load_model_package(filename):
-
-    path = os.path.join(
-        MODEL_DIR,
-        filename
-    )
+def load_model_package(path):
 
     if not os.path.exists(path):
 
-        raise FileNotFoundError(
-            f"Model not found: {path}"
+        print(
+            f"[WARNING] Model not found: {path}"
         )
 
-    return joblib.load(path)
-
-
-# =========================================================
-# LOAD SEPSIS MODEL
-# =========================================================
-
-try:
-
-    sepsis_package = load_model_package(
-        "lightgbm_sepsis.pkl"
-    )
-
-    if isinstance(sepsis_package, dict):
-
-        sepsis_model = sepsis_package.get("model")
-
-        sepsis_features = sepsis_package.get(
-            "features",
-            []
-        )
-
-        sepsis_categorical_features = (
-            sepsis_package.get(
-                "categorical_features",
-                []
-            )
-        )
-
-        sepsis_medians = sepsis_package.get(
-            "medians",
-            {}
-        )
-
-        sepsis_threshold = sepsis_package.get(
-            "threshold",
-            0.50
-        )
-
-    else:
-
-        sepsis_model = sepsis_package
-        sepsis_features = []
-        sepsis_categorical_features = []
-        sepsis_medians = {}
-        sepsis_threshold = 0.50
-
-
-    if sepsis_model is None:
-
-        raise ValueError(
-            "Sepsis model could not be loaded"
-        )
-
-
-    print(
-        "Sepsis model loaded successfully"
-    )
-
-    print(
-        "Sepsis features:",
-        sepsis_features
-    )
-
-    print(
-        "Sepsis categorical features:",
-        sepsis_categorical_features
-    )
-
-
-except Exception as e:
-
-    print(
-        "ERROR loading sepsis model:",
-        str(e)
-    )
-
-    raise
-
-
-# =========================================================
-# ORGAN MODEL FILES
-# =========================================================
-
-ORGAN_MODEL_FILES = {
-
-    "kidney":
-        "kidney_risk_model_v2.pkl",
-
-    "liver":
-        "liver_risk_model_v2.pkl",
-
-    "lung":
-        "lung_risk_model_v2.pkl",
-
-    "cardiovascular":
-        "cardiovascular_risk_model_v2.pkl"
-}
-
-
-# =========================================================
-# LOAD ORGAN MODELS
-# =========================================================
-
-organ_models = {}
-
-
-for organ_name, filename in ORGAN_MODEL_FILES.items():
+        return None
 
     try:
 
-        package = load_model_package(
-            filename
-        )
+        package = joblib.load(path)
 
         if isinstance(package, dict):
 
-            model = package.get(
-                "model"
+            print(
+                f"[AI] Loaded model package: "
+                f"{os.path.basename(path)}"
             )
-
-            features = package.get(
-                "features",
-                []
-            )
-
-            categorical_features = (
-                package.get(
-                    "categorical_features",
-                    []
-                )
-            )
-
-            threshold = package.get(
-                "threshold",
-                0.50
-            )
-
-            medians = package.get(
-                "medians",
-                {}
-            )
-
-        else:
-
-            model = package
-            features = []
-            categorical_features = []
-            threshold = 0.50
-            medians = {}
-
-
-        if model is None:
 
             print(
-                f"WARNING: {organ_name} model is empty"
+                f"[AI] Package keys: "
+                f"{list(package.keys())}"
             )
 
-            continue
+            return package
 
+        print(
+            f"[AI] Loaded direct model: "
+            f"{os.path.basename(path)}"
+        )
 
-        organ_models[organ_name] = {
-
-            "model":
-                model,
-
-            "features":
-                features,
-
-            "categorical_features":
-                categorical_features,
-
-            "threshold":
-                threshold,
-
-            "medians":
-                medians
+        return {
+            "model": package
         }
-
-
-        print(
-            f"{organ_name} model loaded successfully"
-        )
-
-        print(
-            f"{organ_name} features:",
-            features
-        )
-
 
     except Exception as e:
 
         print(
-            f"WARNING: Could not load "
-            f"{organ_name} model: {str(e)}"
+            f"[ERROR] Loading model "
+            f"{os.path.basename(path)} failed: "
+            f"{e}"
         )
 
-
-# =========================================================
-# RISK LEVEL
-# =========================================================
-
-def get_risk_level(probability: float):
-
-    if probability < 0.25:
-        return "LOW"
-
-    elif probability < 0.50:
-        return "MODERATE"
-
-    elif probability < 0.75:
-        return "HIGH"
-
-    return "CRITICAL"
-
-
-# =========================================================
-# AGE
-# =========================================================
-
-def calculate_age(date_of_birth):
-
-    if date_of_birth is None:
         return None
 
-    today = date.today()
 
-    age = (
-        today.year
-        - date_of_birth.year
-    )
+# ============================================================
+# LOAD ALL MODELS
+# ============================================================
 
-    if (
-        (today.month, today.day)
-        <
-        (
-            date_of_birth.month,
-            date_of_birth.day
+sepsis_package = load_model_package(
+    SEPSIS_MODEL_PATH
+)
+
+kidney_package = load_model_package(
+    KIDNEY_MODEL_PATH
+)
+
+liver_package = load_model_package(
+    LIVER_MODEL_PATH
+)
+
+lung_package = load_model_package(
+    LUNG_MODEL_PATH
+)
+
+cardiovascular_package = load_model_package(
+    CARDIOVASCULAR_MODEL_PATH
+)
+
+
+# ============================================================
+# MODEL LOAD SUMMARY
+# ============================================================
+
+print("=" * 70)
+print("[AI] MODEL LOAD STATUS")
+print("=" * 70)
+
+print(
+    "[AI] Sepsis:",
+    sepsis_package is not None
+)
+
+print(
+    "[AI] Kidney:",
+    kidney_package is not None
+)
+
+print(
+    "[AI] Liver:",
+    liver_package is not None
+)
+
+print(
+    "[AI] Lung:",
+    lung_package is not None
+)
+
+print(
+    "[AI] Cardiovascular:",
+    cardiovascular_package is not None
+)
+
+print("=" * 70)
+
+
+# ============================================================
+# GET MODEL
+# ============================================================
+
+def get_model(package):
+
+    if package is None:
+        return None
+
+    if isinstance(package, dict):
+
+        return package.get(
+            "model"
         )
-    ):
 
-        age -= 1
-
-    return age
+    return package
 
 
-# =========================================================
-# SAFE FLOAT
-# =========================================================
+# ============================================================
+# GET RISK LEVEL
+# ============================================================
 
-def safe_float(value):
-
-    if value is None:
-        return None
+def get_risk_level(probability):
 
     try:
 
-        value = float(value)
-
-        if np.isnan(value):
-            return None
-
-        if np.isinf(value):
-            return None
-
-        return value
+        probability = float(
+            probability
+        )
 
     except (
         ValueError,
         TypeError
     ):
 
-        return None
+        return "UNKNOWN"
+
+    if probability < 0.25:
+
+        return "LOW"
+
+    elif probability < 0.50:
+
+        return "MODERATE"
+
+    elif probability < 0.75:
+
+        return "HIGH"
+
+    else:
+
+        return "CRITICAL"
 
 
-# =========================================================
-# GET ATTRIBUTE SAFELY
-# =========================================================
+# ============================================================
+# SAFE FLOAT
+# ============================================================
+
+def safe_float(
+    value,
+    default=None
+):
+
+    try:
+
+        if value is None:
+
+            return default
+
+        if isinstance(
+            value,
+            str
+        ):
+
+            value = value.strip()
+
+            if value == "":
+
+                return default
+
+        if pd.isna(value):
+
+            return default
+
+        result = float(
+            value
+        )
+
+        if not np.isfinite(
+            result
+        ):
+
+            return default
+
+        return result
+
+    except (
+        ValueError,
+        TypeError
+    ):
+
+        return default
+
+
+# ============================================================
+# GET VALUE FROM OBJECT
+# ============================================================
 
 def get_value(
     obj,
-    field,
+    name,
     default=None
 ):
 
     if obj is None:
+
         return default
 
     try:
 
         value = getattr(
             obj,
-            field,
+            name,
             default
         )
+
+        if value is None:
+
+            return default
 
         return value
 
@@ -364,1035 +397,1650 @@ def get_value(
         return default
 
 
-# =========================================================
-# CLEAN MODEL INPUT
-# =========================================================
+# ============================================================
+# CALCULATE AGE
+# ============================================================
 
-def clean_model_input(
-    df,
-    categorical_features=None,
-    medians=None
+def calculate_age(
+    date_of_birth
 ):
 
-    df = df.copy()
+    if date_of_birth is None:
 
-    categorical_features = (
-        categorical_features or []
-    )
+        return None
 
-    medians = medians or {}
+    try:
 
+        today = date.today()
 
-    # -----------------------------------------------------
-    # Replace infinity
-    # -----------------------------------------------------
-
-    df = df.replace(
-        [np.inf, -np.inf],
-        np.nan
-    )
-
-
-    # -----------------------------------------------------
-    # Numeric conversion
-    # -----------------------------------------------------
-
-    for column in df.columns:
-
-        if column not in categorical_features:
-
-            df[column] = pd.to_numeric(
-                df[column],
-                errors="coerce"
-            )
-
-
-    # -----------------------------------------------------
-    # Categorical conversion
-    # -----------------------------------------------------
-
-    for column in categorical_features:
-
-        if column in df.columns:
-
-            df[column] = (
-                df[column]
-                .astype("string")
-                .fillna("UNKNOWN")
-                .astype("category")
-            )
-
-
-    # -----------------------------------------------------
-    # Numeric missing values
-    # -----------------------------------------------------
-
-    for column in df.columns:
-
-        if column in categorical_features:
-            continue
-
-        if not df[column].isna().any():
-            continue
-
-        median_value = medians.get(
-            column
-        )
-
-        if median_value is None:
-
-            valid_values = (
-                df[column]
-                .dropna()
-            )
-
-            if len(valid_values) > 0:
-
-                median_value = (
-                    valid_values.median()
+        age = (
+            today.year
+            - date_of_birth.year
+            - (
+                (
+                    today.month,
+                    today.day
                 )
-
-        if (
-            median_value is None
-            or pd.isna(median_value)
-        ):
-
-            median_value = 0.0
-
-        df[column] = (
-            df[column]
-            .fillna(float(median_value))
+                <
+                (
+                    date_of_birth.month,
+                    date_of_birth.day
+                )
+            )
         )
 
+        return int(age)
 
-    # -----------------------------------------------------
-    # Final numeric dtype
-    # -----------------------------------------------------
+    except Exception:
 
-    for column in df.columns:
-
-        if column not in categorical_features:
-
-            df[column] = pd.to_numeric(
-                df[column],
-                errors="coerce"
-            )
-
-            df[column] = (
-                df[column]
-                .fillna(0.0)
-                .astype("float64")
-            )
+        return None
 
 
-    return df
+# ============================================================
+# CLINICAL NORMAL TARGETS
+#
+# INTERNAL USE ONLY
+#
+# These values are NOT returned to frontend.
+# ============================================================
+
+CLINICAL_NORMAL_VALUES = {
+
+    "heart_rate": 75.0,
+
+    "systolic_bp": 120.0,
+
+    "diastolic_bp": 80.0,
+
+    "map": 85.0,
+
+    "respiratory_rate": 16.0,
+
+    "temperature": 37.0,
+
+    "spo2": 98.0,
+
+    "urine_output": 60.0,
+
+    "gcs": 15.0,
+
+    "wbc": 7.5,
+
+    "platelets": 250.0,
+
+    "creatinine": 0.9,
+
+    "bilirubin": 1.0,
+
+    "lactate": 1.2,
+
+    "glucose": 100.0,
+
+    "crp": 3.0,
+
+    "procalcitonin": 0.05,
+}
 
 
-# =========================================================
-# PREPARE MODEL INPUT
-# =========================================================
+# ============================================================
+# CLINICAL FEATURES
+# ============================================================
 
-def prepare_model_input(
-    patient_data,
-    features,
-    categorical_features,
-    medians=None
+CLINICAL_FEATURES = {
+
+    "temperature": {
+
+        "label": "Temperature",
+
+        "unit": "°C",
+
+        "normal_low": 36.0,
+
+        "normal_high": 37.5,
+    },
+
+    "heart_rate": {
+
+        "label": "Heart Rate",
+
+        "unit": "bpm",
+
+        "normal_low": 60.0,
+
+        "normal_high": 100.0,
+    },
+
+    "systolic_bp": {
+
+        "label": "Systolic BP",
+
+        "unit": "mmHg",
+
+        "normal_low": 90.0,
+
+        "normal_high": 120.0,
+    },
+
+    "diastolic_bp": {
+
+        "label": "Diastolic BP",
+
+        "unit": "mmHg",
+
+        "normal_low": 60.0,
+
+        "normal_high": 80.0,
+    },
+
+    "map": {
+
+        "label": "Mean Arterial Pressure",
+
+        "unit": "mmHg",
+
+        "normal_low": 65.0,
+
+        "normal_high": 100.0,
+    },
+
+    "respiratory_rate": {
+
+        "label": "Respiratory Rate",
+
+        "unit": "breaths/min",
+
+        "normal_low": 12.0,
+
+        "normal_high": 20.0,
+    },
+
+    "spo2": {
+
+        "label": "SpO₂",
+
+        "unit": "%",
+
+        "normal_low": 95.0,
+
+        "normal_high": 100.0,
+    },
+
+    "urine_output": {
+
+        "label": "Urine Output",
+
+        "unit": "mL/hr",
+
+        "normal_low": 30.0,
+
+        "normal_high": 100.0,
+    },
+
+    "gcs": {
+
+        "label": "GCS",
+
+        "unit": "",
+
+        "normal_low": 15.0,
+
+        "normal_high": 15.0,
+    },
+
+    "wbc": {
+
+        "label": "WBC",
+
+        "unit": "×10³/µL",
+
+        "normal_low": 4.0,
+
+        "normal_high": 11.0,
+    },
+
+    "platelets": {
+
+        "label": "Platelets",
+
+        "unit": "×10³/µL",
+
+        "normal_low": 150.0,
+
+        "normal_high": 450.0,
+    },
+
+    "creatinine": {
+
+        "label": "Creatinine",
+
+        "unit": "mg/dL",
+
+        "normal_low": 0.6,
+
+        "normal_high": 1.3,
+    },
+
+    "bilirubin": {
+
+        "label": "Bilirubin",
+
+        "unit": "mg/dL",
+
+        "normal_low": 0.2,
+
+        "normal_high": 1.2,
+    },
+
+    "lactate": {
+
+        "label": "Lactate",
+
+        "unit": "mmol/L",
+
+        "normal_low": 0.5,
+
+        "normal_high": 2.0,
+    },
+
+    "glucose": {
+
+        "label": "Glucose",
+
+        "unit": "mg/dL",
+
+        "normal_low": 70.0,
+
+        "normal_high": 140.0,
+    },
+
+    "crp": {
+
+        "label": "CRP",
+
+        "unit": "mg/L",
+
+        "normal_low": 0.0,
+
+        "normal_high": 5.0,
+    },
+
+    "procalcitonin": {
+
+        "label": "Procalcitonin",
+
+        "unit": "ng/mL",
+
+        "normal_low": 0.0,
+
+        "normal_high": 0.05,
+    },
+}
+
+
+# ============================================================
+# CLINICAL STATUS
+# ============================================================
+
+def get_clinical_status(
+    feature,
+    value
 ):
 
-    df = pd.DataFrame(
-        [patient_data]
+    if feature not in CLINICAL_FEATURES:
+
+        return "UNKNOWN"
+
+    numeric_value = safe_float(
+        value
     )
 
+    if numeric_value is None:
 
-    # -----------------------------------------------------
-    # Check model features
-    # -----------------------------------------------------
+        return "UNKNOWN"
+
+    config = CLINICAL_FEATURES[
+        feature
+    ]
+
+    low = config[
+        "normal_low"
+    ]
+
+    high = config[
+        "normal_high"
+    ]
+
+    if feature == "gcs":
+
+        if numeric_value >= 15:
+
+            return "NORMAL"
+
+        return "LOW"
+
+    if numeric_value < low:
+
+        return "LOW"
+
+    if numeric_value > high:
+
+        return "HIGH"
+
+    return "NORMAL"
+
+
+# ============================================================
+# GET MODEL FEATURES
+# ============================================================
+
+def get_model_features(
+    package
+):
+
+    if package is None:
+
+        return []
+
+    if not isinstance(
+        package,
+        dict
+    ):
+
+        model = get_model(
+            package
+        )
+
+        if model is not None:
+
+            try:
+
+                if hasattr(
+                    model,
+                    "feature_name_"
+                ):
+
+                    return list(
+                        model.feature_name_
+                    )
+
+            except Exception:
+
+                pass
+
+        return []
+
+    features = package.get(
+        "features",
+        None
+    )
 
     if features:
 
-        missing_features = [
-
-            feature
-
-            for feature in features
-
-            if feature not in df.columns
-        ]
-
-
-        if missing_features:
-
-            raise HTTPException(
-
-                status_code=400,
-
-                detail={
-
-                    "message":
-                        "Model features missing",
-
-                    "missing_features":
-                        missing_features
-                }
-            )
-
-
-        # IMPORTANT
-        # Exact training feature order
-
-        df = df[
+        return list(
             features
-        ].copy()
+        )
+
+    model = get_model(
+        package
+    )
+
+    if model is not None:
+
+        try:
+
+            if hasattr(
+                model,
+                "feature_name_"
+            ):
+
+                return list(
+                    model.feature_name_
+                )
+
+        except Exception:
+
+            pass
+
+    return []
 
 
-    # -----------------------------------------------------
-    # Clean
-    # -----------------------------------------------------
+# ============================================================
+# GET CATEGORICAL FEATURES
+# ============================================================
 
-    df = clean_model_input(
+def get_categorical_features(
+    package
+):
 
-        df,
+    if package is None:
 
-        categorical_features,
+        return []
 
-        medians
+    if not isinstance(
+        package,
+        dict
+    ):
+
+        return []
+
+    categorical_features = (
+        package.get(
+            "categorical_features",
+            []
+        )
+    )
+
+    if categorical_features is None:
+
+        return []
+
+    return list(
+        categorical_features
     )
 
 
-    return df
+# ============================================================
+# GET MEDIANS
+# ============================================================
+
+def get_model_medians(
+    package
+):
+
+    if package is None:
+
+        return {}
+
+    if not isinstance(
+        package,
+        dict
+    ):
+
+        return {}
+
+    medians = package.get(
+        "medians",
+        {}
+    )
+
+    if isinstance(
+        medians,
+        dict
+    ):
+
+        return medians
+
+    return {}
 
 
-# =========================================================
-# BUILD PATIENT CLINICAL DATA
-# =========================================================
+# ============================================================
+# GET CATEGORICAL VALUES
+# ============================================================
+
+def get_categorical_categories(
+    package,
+    feature
+):
+
+    if package is None:
+
+        return None
+
+    if not isinstance(
+        package,
+        dict
+    ):
+
+        return None
+
+    possible_keys = [
+
+        "categorical_categories",
+
+        "categorical_values",
+
+        "categories",
+    ]
+
+    for key in possible_keys:
+
+        values = package.get(
+            key,
+            None
+        )
+
+        if not isinstance(
+            values,
+            dict
+        ):
+
+            continue
+
+        categories = values.get(
+            feature,
+            None
+        )
+
+        if categories is not None:
+
+            if isinstance(
+                categories,
+                (
+                    list,
+                    tuple,
+                    set
+                )
+            ):
+
+                return list(
+                    categories
+                )
+
+    return None
+
+
+# ============================================================
+# CLEAN MODEL INPUT
+# ============================================================
+
+def clean_model_input(
+    data,
+    package
+):
+
+    if package is None:
+
+        return data
+
+    data = data.copy()
+
+    categorical_features = (
+        get_categorical_features(
+            package
+        )
+    )
+
+    medians = get_model_medians(
+        package
+    )
+
+    data = data.replace(
+        [
+            np.inf,
+            -np.inf
+        ],
+        np.nan
+    )
+
+    # ========================================================
+    # CATEGORICAL FEATURES
+    # ========================================================
+
+    for column in categorical_features:
+
+        if column not in data.columns:
+
+            continue
+
+        categories = (
+            get_categorical_categories(
+                package,
+                column
+            )
+        )
+
+        if categories:
+
+            value = data[
+                column
+            ].iloc[0]
+
+            if (
+                value is not None
+                and str(value).strip() != ""
+                and value in categories
+            ):
+
+                data[column] = pd.Categorical(
+                    data[column],
+                    categories=categories
+                )
+
+            else:
+
+                data[column] = pd.Categorical(
+                    [np.nan],
+                    categories=categories
+                )
+
+        else:
+
+            try:
+
+                data[column] = (
+                    data[column]
+                    .astype("category")
+                )
+
+            except Exception:
+
+                data[column] = (
+                    data[column]
+                    .astype(str)
+                    .astype("category")
+                )
+
+    # ========================================================
+    # NUMERIC FEATURES
+    # ========================================================
+
+    for column in data.columns:
+
+        if column in categorical_features:
+
+            continue
+
+        data[column] = pd.to_numeric(
+            data[column],
+            errors="coerce"
+        )
+
+        if column in medians:
+
+            median = safe_float(
+                medians[column],
+                0.0
+            )
+
+        else:
+
+            median = safe_float(
+                data[column].median(),
+                0.0
+            )
+
+        data[column] = (
+            data[column]
+            .fillna(median)
+        )
+
+    return data
+
+
+# ============================================================
+# PREPARE MODEL INPUT
+# ============================================================
+
+def prepare_model_input(
+    patient_data,
+    package
+):
+
+    if package is None:
+
+        raise ValueError(
+            "Model package is missing."
+        )
+
+    features = get_model_features(
+        package
+    )
+
+    if not features:
+
+        raise ValueError(
+            "Model feature list not found."
+        )
+
+    X = pd.DataFrame(
+        [patient_data]
+    )
+
+    # Add missing model features
+    for feature in features:
+
+        if feature not in X.columns:
+
+            X[feature] = np.nan
+
+    # Keep exact training feature order
+    X = X[features]
+
+    X = clean_model_input(
+        X,
+        package
+    )
+
+    return X
+
+
+# ============================================================
+# PREDICT PROBABILITY
+# ============================================================
+
+def predict_probability(
+    patient_data,
+    package
+):
+
+    model = get_model(
+        package
+    )
+
+    if model is None:
+
+        raise ValueError(
+            "Model not available."
+        )
+
+    X = prepare_model_input(
+        patient_data,
+        package
+    )
+
+    try:
+
+        probabilities = (
+            model.predict_proba(X)
+        )
+
+    except Exception as e:
+
+        raise ValueError(
+            f"Model predict_proba failed: {e}"
+        )
+
+    if probabilities is None:
+
+        raise ValueError(
+            "Model returned no probability."
+        )
+
+    if len(probabilities) == 0:
+
+        raise ValueError(
+            "Model returned empty probability."
+        )
+
+    if probabilities.shape[1] < 2:
+
+        raise ValueError(
+            "Model does not contain "
+            "binary probability output."
+        )
+
+    probability = probabilities[0][1]
+
+    return float(
+        np.clip(
+            probability,
+            0.0,
+            1.0
+        )
+    )
+
+
+# ============================================================
+# PATIENT-SPECIFIC FEATURE IMPACT
+#
+# Probability change is calculated as:
+#
+# Base patient prediction
+#       -
+# Prediction after replacing ONE abnormal
+# feature with an internal reference target
+#
+# This is model sensitivity / contribution,
+# NOT medical causation.
+# ============================================================
+
+def calculate_patient_specific_feature_impact(
+    patient_data,
+    package,
+    top_n=8
+):
+
+    if package is None:
+
+        return []
+
+    try:
+
+        base_probability = (
+            predict_probability(
+                patient_data,
+                package
+            )
+        )
+
+    except Exception as e:
+
+        print(
+            "[AI] Feature explanation "
+            f"base prediction error: {e}"
+        )
+
+        return []
+
+    results = []
+
+    model_features = (
+        get_model_features(
+            package
+        )
+    )
+
+    for feature, config in (
+        CLINICAL_FEATURES.items()
+    ):
+
+        if feature not in model_features:
+
+            continue
+
+        current_value = safe_float(
+            patient_data.get(
+                feature
+            )
+        )
+
+        if current_value is None:
+
+            continue
+
+        normal_value = (
+            CLINICAL_NORMAL_VALUES.get(
+                feature
+            )
+        )
+
+        if normal_value is None:
+
+            continue
+
+        clinical_status = (
+            get_clinical_status(
+                feature,
+                current_value
+            )
+        )
+
+        # ----------------------------------------------------
+        # Normal feature
+        # ----------------------------------------------------
+
+        if clinical_status == "NORMAL":
+
+            probability_change = 0.0
+
+            perturbed_probability = (
+                base_probability
+            )
+
+        # ----------------------------------------------------
+        # Abnormal feature
+        # ----------------------------------------------------
+
+        else:
+
+            perturbed_data = dict(
+                patient_data
+            )
+
+            perturbed_data[
+                feature
+            ] = normal_value
+
+            try:
+
+                perturbed_probability = (
+                    predict_probability(
+                        perturbed_data,
+                        package
+                    )
+                )
+
+                probability_change = (
+                    base_probability
+                    -
+                    perturbed_probability
+                )
+
+            except Exception as e:
+
+                print(
+                    f"[AI] Feature explanation "
+                    f"failed for {feature}: {e}"
+                )
+
+                continue
+
+        probability_change_percent = (
+            probability_change * 100.0
+        )
+
+        # ----------------------------------------------------
+        # Direction
+        # ----------------------------------------------------
+
+        if probability_change_percent > 0.5:
+
+            direction = (
+                "INCREASES SEPSIS RISK"
+            )
+
+        elif probability_change_percent < -0.5:
+
+            direction = (
+                "DECREASES SEPSIS RISK"
+            )
+
+        else:
+
+            direction = (
+                "MINIMAL MODEL IMPACT"
+            )
+
+        # ----------------------------------------------------
+        # Impact level
+        # ----------------------------------------------------
+
+        absolute_impact = abs(
+            probability_change_percent
+        )
+
+        if absolute_impact >= 10:
+
+            impact = "HIGH IMPACT"
+
+        elif absolute_impact >= 5:
+
+            impact = "MEDIUM IMPACT"
+
+        elif absolute_impact >= 1:
+
+            impact = "LOW IMPACT"
+
+        else:
+
+            impact = "MINIMAL IMPACT"
+
+        # ----------------------------------------------------
+        # Explanation
+        # ----------------------------------------------------
+
+        if direction == (
+            "INCREASES SEPSIS RISK"
+        ):
+
+            explanation = (
+                f"{config['label'].upper()} "
+                f"CONTRIBUTES TO HIGHER "
+                f"MODEL-PREDICTED SEPSIS RISK"
+            )
+
+        elif direction == (
+            "DECREASES SEPSIS RISK"
+        ):
+
+            explanation = (
+                f"{config['label'].upper()} "
+                f"CONTRIBUTES TO LOWER "
+                f"MODEL-PREDICTED SEPSIS RISK"
+            )
+
+        else:
+
+            explanation = (
+                f"{config['label'].upper()} "
+                f"HAS MINIMAL MODEL IMPACT"
+            )
+
+        # ----------------------------------------------------
+        # IMPORTANT
+        #
+        # Do NOT return normal_target,
+        # base_probability or perturbed_probability.
+        #
+        # Frontend only needs:
+        # actual patient value
+        # clinical status
+        # probability change
+        # direction
+        # impact
+        # explanation
+        # ----------------------------------------------------
+
+        results.append({
+
+            "feature": feature,
+
+            "label": config["label"],
+
+            "value": current_value,
+
+            "unit": config["unit"],
+
+            "clinical_status": (
+                clinical_status
+            ),
+
+            "probability_change": round(
+                probability_change_percent,
+                2
+            ),
+
+            "direction": direction,
+
+            "impact": impact,
+
+            "explanation": explanation
+        })
+
+    # --------------------------------------------------------
+    # Sort highest model impact first
+    # --------------------------------------------------------
+
+    results.sort(
+        key=lambda x: abs(
+            x["probability_change"]
+        ),
+        reverse=True
+    )
+
+    return results[:top_n]
+
+
+# ============================================================
+# BUILD PATIENT DATA
+# ============================================================
 
 def build_patient_data(
     patient,
-    vital,
-    lab
+    latest_vitals,
+    latest_labs
 ):
 
-    # =====================================================
-    # AGE
-    # =====================================================
-
     age = calculate_age(
-        patient.date_of_birth
-    )
-
-
-    # =====================================================
-    # VITALS
-    # =====================================================
-
-    temperature = safe_float(
         get_value(
-            vital,
-            "temperature"
+            patient,
+            "date_of_birth"
         )
     )
+
+    gender = get_value(
+        patient,
+        "gender"
+    )
+
+    if isinstance(
+        gender,
+        str
+    ):
+
+        gender = gender.strip()
+
+        if gender == "":
+
+            gender = None
+
+    # ========================================================
+    # VITALS
+    # ========================================================
 
     heart_rate = safe_float(
         get_value(
-            vital,
+            latest_vitals,
             "heart_rate"
-        )
-    )
-
-    respiratory_rate = safe_float(
-        get_value(
-            vital,
-            "respiratory_rate"
         )
     )
 
     systolic_bp = safe_float(
         get_value(
-            vital,
+            latest_vitals,
             "systolic_bp"
         )
     )
 
     diastolic_bp = safe_float(
         get_value(
-            vital,
+            latest_vitals,
             "diastolic_bp"
+        )
+    )
+
+    map_value = safe_float(
+        get_value(
+            latest_vitals,
+            "map"
+        )
+    )
+
+    # ========================================================
+    # CALCULATE MAP IF MISSING
+    # ========================================================
+
+    if (
+        map_value is None
+        and systolic_bp is not None
+        and diastolic_bp is not None
+    ):
+
+        map_value = (
+            diastolic_bp
+            +
+            (
+                systolic_bp
+                -
+                diastolic_bp
+            ) / 3.0
+        )
+
+    respiratory_rate = safe_float(
+        get_value(
+            latest_vitals,
+            "respiratory_rate"
+        )
+    )
+
+    temperature = safe_float(
+        get_value(
+            latest_vitals,
+            "temperature"
         )
     )
 
     spo2 = safe_float(
         get_value(
-            vital,
+            latest_vitals,
             "spo2"
         )
     )
 
     urine_output = safe_float(
         get_value(
-            vital,
+            latest_vitals,
             "urine_output"
         )
     )
 
-
-    # =====================================================
-    # MAP
-    # =====================================================
-
-    map_value = safe_float(
-        get_value(
-            vital,
-            "map"
-        )
-    )
-
-
-    if map_value is None:
-
-        if (
-            systolic_bp is not None
-            and
-            diastolic_bp is not None
-        ):
-
-            map_value = (
-                systolic_bp
-                +
-                2 * diastolic_bp
-            ) / 3
-
-
-    # =====================================================
-    # GCS
-    # =====================================================
-
     gcs = safe_float(
         get_value(
-            vital,
+            latest_vitals,
             "gcs"
         )
     )
 
-
-    # =====================================================
-    # CLINICAL FLAGS
-    # =====================================================
+    # ========================================================
+    # TREATMENT / CONTEXT
+    # ========================================================
 
     vasopressor = safe_float(
         get_value(
-            vital,
+            latest_vitals,
             "vasopressor",
             0
-        )
+        ),
+        0
     )
 
     mechanical_ventilation = safe_float(
         get_value(
-            vital,
+            latest_vitals,
             "mechanical_ventilation",
             0
-        )
+        ),
+        0
     )
 
     antibiotic_given = safe_float(
         get_value(
-            vital,
+            latest_vitals,
             "antibiotic_given",
             0
-        )
+        ),
+        0
     )
 
     fluid_given = safe_float(
         get_value(
-            vital,
+            latest_vitals,
             "fluid_given",
             0
-        )
+        ),
+        0
     )
 
-
-    # =====================================================
+    # ========================================================
     # LABS
-    # =====================================================
+    # ========================================================
 
     wbc = safe_float(
         get_value(
-            lab,
+            latest_labs,
             "wbc"
         )
     )
 
-    lactate = safe_float(
+    platelets = safe_float(
         get_value(
-            lab,
-            "lactate"
+            latest_labs,
+            "platelets"
         )
     )
 
     creatinine = safe_float(
         get_value(
-            lab,
+            latest_labs,
             "creatinine"
         )
     )
 
     bilirubin = safe_float(
         get_value(
-            lab,
+            latest_labs,
             "bilirubin"
         )
     )
 
-    platelets = safe_float(
+    lactate = safe_float(
         get_value(
-            lab,
-            "platelets"
+            latest_labs,
+            "lactate"
         )
     )
 
     glucose = safe_float(
         get_value(
-            lab,
+            latest_labs,
             "glucose"
         )
     )
 
     crp = safe_float(
         get_value(
-            lab,
+            latest_labs,
             "crp"
         )
     )
 
     procalcitonin = safe_float(
         get_value(
-            lab,
+            latest_labs,
             "procalcitonin"
         )
     )
 
+    return {
 
-    # =====================================================
-    # FINAL MODEL INPUT
-    # =====================================================
+        "age": age,
 
-    patient_data = {
+        "gender": gender,
 
-        # Patient
-        "age":
-            safe_float(age),
+        "heart_rate": heart_rate,
 
-        "gender":
-            get_value(
-                patient,
-                "gender",
-                "UNKNOWN"
-            ),
+        "systolic_bp": systolic_bp,
 
+        "diastolic_bp": diastolic_bp,
 
-        # Vitals
-        "heart_rate":
-            heart_rate,
+        "map": map_value,
 
-        "systolic_bp":
-            systolic_bp,
+        "respiratory_rate": respiratory_rate,
 
-        "diastolic_bp":
-            diastolic_bp,
+        "temperature": temperature,
 
-        "map":
-            map_value,
+        "spo2": spo2,
 
-        "respiratory_rate":
-            respiratory_rate,
+        "urine_output": urine_output,
 
-        "temperature":
-            temperature,
+        "gcs": gcs,
 
-        "spo2":
-            spo2,
+        "vasopressor": vasopressor,
 
+        "mechanical_ventilation": (
+            mechanical_ventilation
+        ),
 
-        # Urine / GCS
-        "urine_output":
-            urine_output,
+        "antibiotic_given": (
+            antibiotic_given
+        ),
 
-        "gcs":
-            gcs,
+        "fluid_given": (
+            fluid_given
+        ),
 
+        "wbc": wbc,
 
-        # Clinical flags
-        "vasopressor":
-            vasopressor,
+        "platelets": platelets,
 
-        "mechanical_ventilation":
-            mechanical_ventilation,
+        "creatinine": creatinine,
 
-        "antibiotic_given":
-            antibiotic_given,
+        "bilirubin": bilirubin,
 
-        "fluid_given":
-            fluid_given,
+        "lactate": lactate,
 
+        "glucose": glucose,
 
-        # Labs
-        "wbc":
-            wbc,
+        "crp": crp,
 
-        "lactate":
-            lactate,
-
-        "creatinine":
-            creatinine,
-
-        "bilirubin":
-            bilirubin,
-
-        "platelets":
-            platelets,
-
-        "glucose":
-            glucose,
-
-        "crp":
-            crp,
-
-        "procalcitonin":
-            procalcitonin
+        "procalcitonin": procalcitonin
     }
 
 
-    return patient_data
+# ============================================================
+# VALIDATE CLINICAL DATA
+# ============================================================
 
-
-# =========================================================
-# PREDICT PATIENT
-# =========================================================
-
-@router.post(
-    "/predict/{patient_id}"
-)
-def predict_patient(
-
-    patient_id: str,
-
-    db: Session = Depends(
-        get_db
-    )
+def validate_clinical_data(
+    patient_data
 ):
+
+    required_fields = [
+
+        "heart_rate",
+
+        "systolic_bp",
+
+        "diastolic_bp",
+
+        "respiratory_rate",
+
+        "temperature",
+
+        "spo2"
+    ]
+
+    missing_fields = []
+
+    invalid_fields = []
+
+    for field in required_fields:
+
+        value = patient_data.get(
+            field
+        )
+
+        if value is None:
+
+            missing_fields.append(
+                field
+            )
+
+            continue
+
+        numeric_value = safe_float(
+            value
+        )
+
+        if numeric_value is None:
+
+            invalid_fields.append(
+                field
+            )
+
+    return (
+        missing_fields,
+        invalid_fields
+    )
+
+
+# ============================================================
+# ORGAN MODEL PREDICTION
+# ============================================================
+
+def predict_organ_risk(
+    patient_data,
+    package,
+    organ_name
+):
+
+    if package is None:
+
+        return {
+
+            "prediction": 0,
+
+            "probability": 0,
+
+            "risk_level": "UNKNOWN",
+
+            "error": (
+                f"{organ_name} model not available"
+            )
+        }
 
     try:
 
-        print("")
-        print("========================================")
-        print("AI PREDICTION START")
-        print("Patient:", patient_id)
-        print("========================================")
+        probability = predict_probability(
+            patient_data,
+            package
+        )
+
+        prediction = int(
+            probability >= 0.50
+        )
+
+        return {
+
+            "prediction": prediction,
+
+            "probability": round(
+                probability * 100,
+                2
+            ),
+
+            "risk_level": (
+                get_risk_level(
+                    probability
+                )
+            )
+        }
+
+    except Exception as e:
+
+        print(
+            f"[AI] {organ_name} prediction "
+            f"failed: {e}"
+        )
+
+        return {
+
+            "prediction": 0,
+
+            "probability": 0,
+
+            "risk_level": "UNKNOWN",
+
+            "error": str(e)
+        }
 
 
-        # =================================================
-        # PATIENT
-        # =================================================
+# ============================================================
+# PREDICT PATIENT
+# ============================================================
+
+@router.post(
+    "/predict/{patient_identifier}"
+)
+def predict_patient(
+    patient_identifier: str,
+    db: Session = Depends(get_db)
+):
+
+    print("\n")
+    print("=" * 70)
+
+    print(
+        f"[AI] Starting prediction for patient "
+        f"{patient_identifier}"
+    )
+
+    print("=" * 70)
+
+    # ========================================================
+    # GET PATIENT
+    # ========================================================
+
+    patient = None
+
+    # ========================================================
+    # 1. TRY DATABASE INTEGER ID
+    # ========================================================
+
+    try:
+
+        numeric_id = int(
+            patient_identifier
+        )
 
         patient = (
-
-            db.query(
-                Patient
-            )
-
+            db.query(Patient)
             .filter(
-                Patient.patient_id
-                == patient_id
+                Patient.id == numeric_id
             )
-
             .first()
         )
 
+    except (
+        ValueError,
+        TypeError
+    ):
 
-        if not patient:
+        pass
 
-            raise HTTPException(
+    # ========================================================
+    # 2. TRY HUMAN-READABLE PATIENT ID
+    #
+    # Example:
+    # PAT-2026-000020
+    # ========================================================
 
-                status_code=404,
+    if patient is None:
 
-                detail="Patient not found"
+        patient = (
+            db.query(Patient)
+            .filter(
+                Patient.patient_id
+                == patient_identifier
             )
+            .first()
+        )
 
+    # ========================================================
+    # PATIENT NOT FOUND
+    # ========================================================
 
-        # =================================================
-        # LATEST NURSE VITALS
-        # =================================================
+    if patient is None:
 
-        vital = (
+        print(
+            f"[AI] Patient not found: "
+            f"{patient_identifier}"
+        )
 
-            db.query(
-                VitalSign
-            )
+        raise HTTPException(
 
+            status_code=404,
+
+            detail={
+
+                "message": "Patient not found",
+
+                "patient_identifier": (
+                    patient_identifier
+                )
+            }
+        )
+
+    # ========================================================
+    # PATIENT ID
+    #
+    # VitalSign.patient_id is VARCHAR.
+    #
+    # Therefore use:
+    #
+    # patient.patient_id
+    #
+    # NOT:
+    #
+    # patient.id
+    # ========================================================
+
+    patient_id = patient.patient_id
+
+    print(
+        f"[AI] Database ID: "
+        f"{patient.id}"
+    )
+
+    print(
+        f"[AI] Patient ID: "
+        f"{patient.patient_id}"
+    )
+
+    # ========================================================
+    # GET LATEST VITALS
+    # ========================================================
+
+    try:
+
+        latest_vitals = (
+            db.query(VitalSign)
             .filter(
                 VitalSign.patient_id
                 == patient_id
             )
-
             .order_by(
                 VitalSign.recorded_at.desc()
             )
-
             .first()
         )
 
+    except Exception as e:
 
-        if not vital:
+        print(
+            "[AI] Vital query failed:",
+            e
+        )
 
-            raise HTTPException(
+        raise HTTPException(
 
-                status_code=404,
+            status_code=500,
 
-                detail={
-                    "message":
-                        "No nurse vital signs found",
+            detail={
 
-                    "patient_id":
-                        patient_id
-                }
-            )
+                "message": (
+                    "Unable to retrieve "
+                    "patient vital signs"
+                ),
 
+                "error": str(e)
+            }
+        )
 
-        # =================================================
-        # LATEST NURSE LAB
-        # =================================================
+    # ========================================================
+    # GET LATEST LABS
+    # ========================================================
 
-        lab = (
+    try:
 
-            db.query(
-                LabResult
-            )
-
+        latest_labs = (
+            db.query(LabResult)
             .filter(
                 LabResult.patient_id
                 == patient_id
             )
-
             .order_by(
                 LabResult.recorded_at.desc()
             )
-
             .first()
         )
 
-
-        # =================================================
-        # BUILD CLINICAL INPUT
-        # =================================================
-
-        patient_data = build_patient_data(
-
-            patient,
-
-            vital,
-
-            lab
-        )
-
-
-        # =================================================
-        # DEBUG
-        # =================================================
-
-        print("")
-        print("AI INPUT")
-        print("----------------------------------------")
-
-        for key, value in patient_data.items():
-
-            print(
-                f"{key}: {value}"
-            )
-
-        print("----------------------------------------")
-
-
-        # =================================================
-        # BASIC REQUIRED DATA
-        # =================================================
-
-        required_basic = [
-
-            "age",
-            "gender",
-            "heart_rate",
-            "systolic_bp",
-            "diastolic_bp",
-            "respiratory_rate",
-            "temperature",
-            "spo2"
-        ]
-
-
-        missing_basic = [
-
-            field
-
-            for field in required_basic
-
-            if (
-                patient_data.get(field)
-                is None
-            )
-        ]
-
-
-        if missing_basic:
-
-            raise HTTPException(
-
-                status_code=400,
-
-                detail={
-
-                    "message":
-                        "Required nurse clinical data missing",
-
-                    "missing_fields":
-                        missing_basic,
-
-                    "patient_id":
-                        patient_id
-                }
-            )
-
-
-        # =================================================
-        # SEPSIS MODEL INPUT
-        # =================================================
-
-        X_sepsis = prepare_model_input(
-
-            patient_data,
-
-            sepsis_features,
-
-            sepsis_categorical_features,
-
-            sepsis_medians
-        )
-
-
-        print("")
-        print("SEPSIS MODEL INPUT")
-        print("----------------------------------------")
-        print(X_sepsis)
-        print("----------------------------------------")
-
-
-        # =================================================
-        # SEPSIS PREDICTION
-        # =================================================
-
-        sepsis_probability = (
-
-            sepsis_model
-            .predict_proba(
-                X_sepsis
-            )[0][1]
-        )
-
-
-        sepsis_probability = float(
-            sepsis_probability
-        )
-
-
-        sepsis_prediction = (
-
-            sepsis_probability
-            >= sepsis_threshold
-        )
-        # =================================================
-# CRITICAL PATIENT STATUS
-# =================================================
-
-        CRITICAL_THRESHOLD = 0.70
-
-        if sepsis_probability >= CRITICAL_THRESHOLD:
-
-            patient.critical = True
-
-        else:
-
-            patient.critical = False
-
-        db.add(patient)
-        db.commit()
-        db.refresh(patient)
-
-        print(
-                f"Critical status: {patient.critical}"
-        )
-
-        # =================================================
-        # ORGAN RISK
-        # =================================================
-
-        organ_results = {}
-
-
-        for organ_name, package in organ_models.items():
-
-            try:
-
-                model = package[
-                    "model"
-                ]
-
-                features = package[
-                    "features"
-                ]
-
-                categorical_features = (
-                    package[
-                        "categorical_features"
-                    ]
-                )
-
-                threshold = package[
-                    "threshold"
-                ]
-
-                medians = package.get(
-                    "medians",
-                    {}
-                )
-
-
-                # -----------------------------------------
-                # PREPARE INPUT
-                # -----------------------------------------
-
-                X = prepare_model_input(
-
-                    patient_data,
-
-                    features,
-
-                    categorical_features,
-
-                    medians
-                )
-
-
-                # -----------------------------------------
-                # PREDICTION
-                # -----------------------------------------
-
-                probability = (
-
-                    model
-                    .predict_proba(
-                        X
-                    )[0][1]
-                )
-
-
-                probability = float(
-                    probability
-                )
-
-
-                prediction = (
-
-                    probability
-                    >= threshold
-                )
-
-
-                # -----------------------------------------
-                # RESULT
-                # -----------------------------------------
-
-                organ_results[
-                    organ_name
-                ] = {
-
-                    "prediction":
-
-                        "HIGH_RISK"
-                        if prediction
-                        else "LOW_RISK",
-
-                    "probability":
-
-                        round(
-                            probability * 100,
-                            2
-                        ),
-
-                    "risk_level":
-
-                        get_risk_level(
-                            probability
-                        )
-                }
-
-
-                print(
-                    f"{organ_name}: "
-                    f"{probability * 100:.2f}%"
-                )
-
-
-            except Exception as organ_error:
-
-                print(
-                    f"{organ_name} prediction error:",
-                    str(organ_error)
-                )
-
-
-                organ_results[
-                    organ_name
-                ] = {
-
-                    "prediction":
-                        "NOT_AVAILABLE",
-
-                    "probability":
-                        None,
-
-                    "risk_level":
-                        "UNKNOWN",
-
-                    "error":
-                        str(organ_error)
-                }
-
-
-        # =================================================
-        # RESPONSE
-        # =================================================
-
-        result = {
-
-            "status":
-                "success",
-
-            "patient_id":
-                patient.patient_id,
-
-            "patient_name":
-                (
-                    f"{patient.first_name} "
-                    f"{patient.last_name}"
-                ),
-
-            "critical": 
-                patient.critical,
-
-            # -------------------------------------------------
-            # SEPSIS
-            # -------------------------------------------------
-
-            "sepsis": {
-
-                "prediction":
-
-                    "SEPSIS POSITIVE"
-                    if sepsis_prediction
-                    else "SEPSIS NEGATIVE",
-
-                "probability":
-
-                    round(
-                        sepsis_probability * 100,
-                        2
-                    ),
-
-                "risk_level":
-
-                    get_risk_level(
-                        sepsis_probability
-                    )
-            },
-
-
-            # -------------------------------------------------
-            # ORGAN RISKS
-            # -------------------------------------------------
-
-            "organ_risks":
-                organ_results,
-
-
-            # -------------------------------------------------
-            # SOURCE
-            # -------------------------------------------------
-
-            "source": {
-
-                "vitals":
-                    "latest_nurse_assessment",
-
-                "labs":
-                    "latest_nurse_assessment",
-
-                "vital_record_id":
-                    get_value(
-                        vital,
-                        "id"
-                    ),
-
-                "lab_record_id":
-                    get_value(
-                        lab,
-                        "id"
-                    )
-            },
-
-
-            # -------------------------------------------------
-            # INPUT USED FOR AI
-            # -------------------------------------------------
-
-            "clinical_data": patient_data
-        }
-
-
-        print("")
-        print("========================================")
-        print("AI PREDICTION SUCCESS")
-        print("Patient:", patient_id)
-        print(
-            "Sepsis:",
-            result["sepsis"]
-        )
-        print("========================================")
-
-
-        return result
-
-
-    # =====================================================
-    # HTTP ERROR
-    # =====================================================
-
-    except HTTPException:
-
-        raise
-
-
-    # =====================================================
-    # GENERAL ERROR
-    # =====================================================
-
     except Exception as e:
 
-        print("")
-        print("========================================")
-        print("AI PREDICTION ERROR")
-        print("Patient:", patient_id)
-        print("Error:", str(e))
-        print("========================================")
-
+        print(
+            "[AI] Lab query failed:",
+            e
+        )
 
         raise HTTPException(
 
@@ -1400,128 +2048,816 @@ def predict_patient(
 
             detail={
 
-                "message":
-                    "AI prediction failed",
+                "message": (
+                    "Unable to retrieve "
+                    "patient laboratory results"
+                ),
 
-                "patient_id":
-                    patient_id,
-
-                "error":
-                    str(e)
+                "error": str(e)
             }
         )
 
+    # ========================================================
+    # CHECK VITAL RECORD
+    # ========================================================
 
-# =========================================================
-# AI STATUS
-# =========================================================
+    if latest_vitals is None:
+
+        print(
+            f"[AI] No vital record found "
+            f"for patient {patient_id}"
+        )
+
+        raise HTTPException(
+
+            status_code=422,
+
+            detail={
+
+                "message": (
+                    "No clinical vital-sign "
+                    "record found for this patient"
+                ),
+
+                "missing_source": "vitals",
+
+                "patient_id": patient_id
+            }
+        )
+
+    # ========================================================
+    # BUILD PATIENT DATA
+    # ========================================================
+
+    patient_data = build_patient_data(
+
+        patient,
+
+        latest_vitals,
+
+        latest_labs
+    )
+
+    # ========================================================
+    # DEBUG PATIENT DATA
+    # ========================================================
+
+    print(
+        "[AI] Patient data:"
+    )
+
+    for key, value in (
+        patient_data.items()
+    ):
+
+        print(
+            f"    {key}: {value}"
+        )
+
+    print("-" * 70)
+
+    # ========================================================
+    # VALIDATE CLINICAL DATA
+    # ========================================================
+
+    (
+        missing_fields,
+        invalid_fields
+    ) = validate_clinical_data(
+        patient_data
+    )
+
+    if (
+        missing_fields
+        or invalid_fields
+    ):
+
+        print(
+            "[AI] CLINICAL DATA VALIDATION FAILED"
+        )
+
+        print(
+            f"[AI] Missing fields: "
+            f"{missing_fields}"
+        )
+
+        print(
+            f"[AI] Invalid fields: "
+            f"{invalid_fields}"
+        )
+
+        raise HTTPException(
+
+            status_code=422,
+
+            detail={
+
+                "message": (
+                    "Required clinical data "
+                    "missing or invalid"
+                ),
+
+                "missing_fields": (
+                    missing_fields
+                ),
+
+                "invalid_fields": (
+                    invalid_fields
+                ),
+
+                "patient_data": {
+
+                    key: patient_data.get(
+                        key
+                    )
+
+                    for key in [
+
+                        "heart_rate",
+
+                        "systolic_bp",
+
+                        "diastolic_bp",
+
+                        "respiratory_rate",
+
+                        "temperature",
+
+                        "spo2"
+                    ]
+                }
+            }
+        )
+
+    # ========================================================
+    # CHECK SEPSIS MODEL
+    # ========================================================
+
+    if sepsis_package is None:
+
+        print(
+            "[AI] ERROR: Sepsis model package "
+            "is None"
+        )
+
+        print(
+            "[AI] Expected model path:",
+            SEPSIS_MODEL_PATH
+        )
+
+        print(
+            "[AI] Model exists:",
+            os.path.exists(
+                SEPSIS_MODEL_PATH
+            )
+        )
+
+        raise HTTPException(
+
+            status_code=500,
+
+            detail={
+
+                "message": (
+                    "Sepsis model not available"
+                ),
+
+                "model_path": (
+                    SEPSIS_MODEL_PATH
+                ),
+
+                "model_exists": (
+                    os.path.exists(
+                        SEPSIS_MODEL_PATH
+                    )
+                )
+            }
+        )
+
+    # ========================================================
+    # CHECK ACTUAL MODEL OBJECT
+    # ========================================================
+
+    sepsis_model = get_model(
+        sepsis_package
+    )
+
+    if sepsis_model is None:
+
+        raise HTTPException(
+
+            status_code=500,
+
+            detail={
+
+                "message": (
+                    "Sepsis model package "
+                    "loaded, but model object "
+                    "is missing"
+                ),
+
+                "model_path": (
+                    SEPSIS_MODEL_PATH
+                )
+            }
+        )
+
+    # ========================================================
+    # PRINT MODEL FEATURES
+    # ========================================================
+
+    sepsis_features = (
+        get_model_features(
+            sepsis_package
+        )
+    )
+
+    print(
+        "[AI] Sepsis model features:"
+    )
+
+    print(
+        sepsis_features
+    )
+
+    # ========================================================
+    # SEPSIS PREDICTION
+    # ========================================================
+
+    try:
+
+        sepsis_probability = (
+            predict_probability(
+
+                patient_data,
+
+                sepsis_package
+            )
+        )
+
+    except Exception as e:
+
+        print(
+            "[AI] Sepsis prediction error:"
+        )
+
+        print(
+            repr(e)
+        )
+
+        raise HTTPException(
+
+            status_code=500,
+
+            detail={
+
+                "message": (
+                    "Sepsis prediction failed"
+                ),
+
+                "error": str(e),
+
+                "patient_id": (
+                    patient.patient_id
+                ),
+
+                "model_features": (
+                    sepsis_features
+                )
+            }
+        )
+
+    # ========================================================
+    # TRAINING-SAVED THRESHOLD
+    # ========================================================
+
+    model_threshold = (
+        sepsis_package.get(
+            "threshold",
+            0.50
+        )
+        if isinstance(
+            sepsis_package,
+            dict
+        )
+        else 0.50
+    )
+
+    try:
+
+        model_threshold = float(
+            model_threshold
+        )
+
+    except (
+        ValueError,
+        TypeError
+    ):
+
+        model_threshold = 0.50
+
+    # ========================================================
+    # SEPSIS PREDICTION CLASS
+    # ========================================================
+
+    sepsis_prediction = int(
+
+        sepsis_probability
+        >= model_threshold
+    )
+
+    sepsis_risk_level = (
+        get_risk_level(
+            sepsis_probability
+        )
+    )
+
+    # ========================================================
+    # CRITICAL STATUS
+    # ========================================================
+
+    patient.critical = bool(
+
+        sepsis_probability
+        >= CRITICAL_THRESHOLD
+    )
+
+    try:
+
+        db.commit()
+
+    except Exception as e:
+
+        print(
+            "[WARNING] Unable to update "
+            f"critical status: {e}"
+        )
+
+        db.rollback()
+
+    # ========================================================
+    # ORGAN RISKS
+    # ========================================================
+
+    organ_risks = {
+
+        "kidney": predict_organ_risk(
+
+            patient_data,
+
+            kidney_package,
+
+            "Kidney"
+        ),
+
+        "liver": predict_organ_risk(
+
+            patient_data,
+
+            liver_package,
+
+            "Liver"
+        ),
+
+        "lung": predict_organ_risk(
+
+            patient_data,
+
+            lung_package,
+
+            "Lung"
+        ),
+
+        "cardiovascular": (
+            predict_organ_risk(
+
+                patient_data,
+
+                cardiovascular_package,
+
+                "Cardiovascular"
+            )
+        )
+    }
+
+    # ========================================================
+    # PATIENT-SPECIFIC FEATURE IMPACT
+    # ========================================================
+
+    patient_feature_impact = (
+        calculate_patient_specific_feature_impact(
+
+            patient_data,
+
+            sepsis_package,
+
+            top_n=8
+        )
+    )
+
+    # ========================================================
+    # CLINICAL DATA RESPONSE
+    # ========================================================
+
+    clinical_data = {
+
+        "age": patient_data.get(
+            "age"
+        ),
+
+        "gender": patient_data.get(
+            "gender"
+        ),
+
+        "heart_rate": patient_data.get(
+            "heart_rate"
+        ),
+
+        "systolic_bp": patient_data.get(
+            "systolic_bp"
+        ),
+
+        "diastolic_bp": patient_data.get(
+            "diastolic_bp"
+        ),
+
+        "map": patient_data.get(
+            "map"
+        ),
+
+        "respiratory_rate": patient_data.get(
+            "respiratory_rate"
+        ),
+
+        "temperature": patient_data.get(
+            "temperature"
+        ),
+
+        "spo2": patient_data.get(
+            "spo2"
+        ),
+
+        "urine_output": patient_data.get(
+            "urine_output"
+        ),
+
+        "gcs": patient_data.get(
+            "gcs"
+        ),
+
+        "wbc": patient_data.get(
+            "wbc"
+        ),
+
+        "platelets": patient_data.get(
+            "platelets"
+        ),
+
+        "creatinine": patient_data.get(
+            "creatinine"
+        ),
+
+        "bilirubin": patient_data.get(
+            "bilirubin"
+        ),
+
+        "lactate": patient_data.get(
+            "lactate"
+        ),
+
+        "glucose": patient_data.get(
+            "glucose"
+        ),
+
+        "crp": patient_data.get(
+            "crp"
+        ),
+
+        "procalcitonin": patient_data.get(
+            "procalcitonin"
+        ),
+
+        "vasopressor": patient_data.get(
+            "vasopressor"
+        ),
+
+        "mechanical_ventilation": (
+            patient_data.get(
+                "mechanical_ventilation"
+            )
+        ),
+
+        "antibiotic_given": (
+            patient_data.get(
+                "antibiotic_given"
+            )
+        ),
+
+        "fluid_given": (
+            patient_data.get(
+                "fluid_given"
+            )
+        )
+    }
+
+    # ========================================================
+    # FINAL RESPONSE
+    # ========================================================
+
+    response = {
+
+        "status": "success",
+
+        "patient_id": (
+            patient.patient_id
+        ),
+
+        "database_id": (
+            patient.id
+        ),
+
+        # ====================================================
+        # SEPSIS
+        # ====================================================
+
+        "sepsis": {
+
+            "prediction": (
+                sepsis_prediction
+            ),
+
+            "probability": round(
+
+                sepsis_probability * 100,
+
+                2
+            ),
+
+            "risk_level": (
+                sepsis_risk_level
+            ),
+
+            "threshold": round(
+
+                model_threshold * 100,
+
+                2
+            )
+        },
+
+        # ====================================================
+        # ORGAN RISKS
+        # ====================================================
+
+        "organ_risks": organ_risks,
+
+        # ====================================================
+        # PATIENT-SPECIFIC EXPLANATION
+        # ====================================================
+
+        "patient_specific_feature_impact": (
+            patient_feature_impact
+        ),
+
+        # Backward compatibility
+        "permutation_importance": (
+            patient_feature_impact
+        ),
+
+        # ====================================================
+        # CLINICAL DATA
+        # ====================================================
+
+        "clinical_data": clinical_data,
+
+        # ====================================================
+        # SOURCE RECORDS
+        # ====================================================
+
+        "source_ids": {
+
+            "vitals_id": getattr(
+
+                latest_vitals,
+
+                "id",
+
+                None
+            ),
+
+            "labs_id": getattr(
+
+                latest_labs,
+
+                "id",
+
+                None
+            )
+        },
+
+        # ====================================================
+        # MODEL STATUS
+        # ====================================================
+
+        "model_status": {
+
+            "sepsis": (
+                sepsis_package is not None
+            ),
+
+            "kidney": (
+                kidney_package is not None
+            ),
+
+            "liver": (
+                liver_package is not None
+            ),
+
+            "lung": (
+                lung_package is not None
+            ),
+
+            "cardiovascular": (
+                cardiovascular_package
+                is not None
+            )
+        }
+    }
+
+    # ========================================================
+    # TERMINAL SUMMARY
+    # ========================================================
+
+    print("=" * 70)
+
+    print(
+        "[AI] Prediction completed"
+    )
+
+    print(
+        f"[AI] Patient ID: "
+        f"{patient.patient_id}"
+    )
+
+    print(
+        f"[AI] Database ID: "
+        f"{patient.id}"
+    )
+
+    print(
+        f"[AI] Sepsis probability: "
+        f"{round(sepsis_probability * 100, 2)}%"
+    )
+
+    print(
+        f"[AI] Sepsis risk: "
+        f"{sepsis_risk_level}"
+    )
+
+    print(
+        f"[AI] Sepsis prediction: "
+        f"{sepsis_prediction}"
+    )
+
+    print(
+        f"[AI] Critical: "
+        f"{patient.critical}"
+    )
+
+    print(
+        f"[AI] Explanation features: "
+        f"{len(patient_feature_impact)}"
+    )
+
+    print("=" * 70)
+
+    print()
+
+    return response
+
+
+# ============================================================
+# MODEL STATUS
+# ============================================================
 
 @router.get(
     "/status"
 )
-def ai_status():
+def model_status():
 
     return {
 
-        "status":
-            "AI module running",
+        "sepsis_model": (
+            sepsis_package is not None
+        ),
 
-        "sepsis_model":
-            "loaded"
-            if sepsis_model
-            else "not loaded",
+        "kidney_model": (
+            kidney_package is not None
+        ),
 
-        "organ_models":
-            list(
-                organ_models.keys()
+        "liver_model": (
+            liver_package is not None
+        ),
+
+        "lung_model": (
+            lung_package is not None
+        ),
+
+        "cardiovascular_model": (
+            cardiovascular_package is not None
+        ),
+
+        "model_directory": MODEL_DIR,
+
+        "sepsis_model_path": (
+            SEPSIS_MODEL_PATH
+        ),
+
+        "sepsis_model_exists": (
+            os.path.exists(
+                SEPSIS_MODEL_PATH
             )
+        )
     }
-    # =========================================================
+
+
+# ============================================================
 # CRITICAL PATIENT COUNT
-# =========================================================
+# ============================================================
 
-@router.get("/critical-count")
-def get_critical_patient_count(
+@router.get(
+    "/critical-count"
+)
+def critical_count(
     db: Session = Depends(get_db)
 ):
-    try:
 
-        count = (
-            db.query(Patient)
-            .filter(
-                Patient.critical.is_(True)
-            )
-            .count()
+    count = (
+        db.query(Patient)
+        .filter(
+            Patient.critical == True
         )
+        .count()
+    )
 
-        return {
-            "status": "success",
-            "critical_count": count
-        }
+    return {
 
-    except Exception as e:
+        "critical_count": count
+    }
 
-        print(
-            "Critical patient count error:",
-            str(e)
-        )
 
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message":
-                    "Failed to get critical patient count",
-                "error":
-                    str(e)
-            }
-        )
+# ============================================================
+# CRITICAL PATIENTS
+# ============================================================
 
-# =========================================================
-# GET CRITICAL PATIENTS
-# =========================================================
-
-@router.get("/critical-patients")
-def get_critical_patients(
+@router.get(
+    "/critical-patients"
+)
+def critical_patients(
     db: Session = Depends(get_db)
 ):
-    try:
 
-        patients = (
-            db.query(Patient)
-            .filter(
-                Patient.critical.is_(True)
-            )
-            .order_by(
-                Patient.patient_id
-            )
-            .all()
+    patients = (
+        db.query(Patient)
+        .filter(
+            Patient.critical == True
         )
+        .all()
+    )
 
-        return {
-            "status": "success",
-            "count": len(patients),
-            "patients": [
-                {
-                    "patient_id": patient.patient_id,
-                    "first_name": patient.first_name,
-                    "last_name": patient.last_name,
-                    "critical": patient.critical
-                }
-                for patient in patients
-            ]
-        }
+    return {
 
-    except Exception as e:
+        "count": len(
+            patients
+        ),
 
-        print(
-            "Critical patients error:",
-            str(e)
-        )
+        "patients": [
 
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "Failed to get critical patients",
-                "error": str(e)
+            {
+
+                "id": patient.id,
+
+                "patient_id": getattr(
+                    patient,
+                    "patient_id",
+                    None
+                ),
+
+                "first_name": getattr(
+                    patient,
+                    "first_name",
+                    ""
+                ),
+
+                "last_name": getattr(
+                    patient,
+                    "last_name",
+                    ""
+                ),
+
+                "critical": True
             }
-        )
+
+            for patient in patients
+        ]
+    }
